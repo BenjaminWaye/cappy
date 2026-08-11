@@ -1,0 +1,37 @@
+name: Sync pricing
+
+on:
+  schedule:
+    # Every Monday 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+        working-directory: cappy
+
+      - run: npm run sync-pricing
+        working-directory: cappy
+
+      - name: Commit pricing update if changed
+        run: |
+          if ! git diff --quiet -- cappy/src/adapters/pricing/synced.json; then
+            git config user.name "cappy-bot"
+            git config user.email "cappy-bot@users.noreply.github.com"
+            git add cappy/src/adapters/pricing/synced.json
+            git commit -m "chore(cappy): sync pricing from models.dev"
+            git push
+          else
+            echo "No pricing changes."
+          fi
