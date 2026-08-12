@@ -25,16 +25,31 @@ test('getAdapter: falls back to first priced model when preferred model is unpri
   assert.ok(adapter.models.includes(adapter.defaultModel));
 });
 
-test('getAdapter: throws for an unsupported (non-OpenAI-wire) provider', () => {
-  assert.throws(() => getAdapter('anthropic'), /Unknown or unsupported provider/);
+test('getAdapter: anthropic resolves to the bespoke adapter with real pricing data', () => {
+  const adapter = getAdapter('anthropic');
+  assert.equal(adapter.id, 'anthropic');
+  assert.equal(adapter.wireFormat, 'anthropic');
+  assert.equal(adapter.endpoint.host, 'api.anthropic.com');
+  assert.ok(adapter.models.length > 0);
+});
+
+test('getAdapter: google resolves to the bespoke adapter with real pricing data', () => {
+  const adapter = getAdapter('google');
+  assert.equal(adapter.id, 'google');
+  assert.equal(adapter.wireFormat, 'google');
+  assert.equal(adapter.endpoint.host, 'generativelanguage.googleapis.com');
+  assert.ok(adapter.models.length > 0);
 });
 
 test('getAdapter: throws for a provider not in the registry at all', () => {
   assert.throws(() => getAdapter('totally-made-up-provider'), /Unknown or unsupported provider/);
 });
 
-test('listProviders: includes deepseek', () => {
-  assert.ok(listProviders().includes('deepseek'));
+test('listProviders: includes deepseek, anthropic, and google', () => {
+  const providers = listProviders();
+  assert.ok(providers.includes('deepseek'));
+  assert.ok(providers.includes('anthropic'));
+  assert.ok(providers.includes('google'));
 });
 
 test('pricingSyncedAt / isPricingStale: real data was synced recently, so not stale', () => {

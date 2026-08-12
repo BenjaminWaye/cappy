@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { startProxyServer, PROXY_PORT } from './proxy/server';
+import { startDashboardServer, DASHBOARD_PORT } from './dashboard/server';
 import { getConfig } from './db/ledger';
 import { isPricingStale, pricingSyncedAt } from './adapters/registry';
 
@@ -22,7 +23,7 @@ async function main(): Promise<void> {
     ));
   }
 
-  await startProxyServer();
+  await Promise.all([startProxyServer(), startDashboardServer()]);
 
   console.log(chalk.green('  ✓ Running\n'));
   console.log(`  Provider : ${chalk.bold(config.provider)}`);
@@ -32,6 +33,8 @@ async function main(): Promise<void> {
   console.log(`  Base URL : ${chalk.cyan(`http://localhost:${PROXY_PORT}/v1`)}`);
   console.log(`  API Key  : ${chalk.cyan(config.local_api_key)}`);
   console.log(`  Model    : ${chalk.cyan(config.default_model)}`);
+  console.log('');
+  console.log(`  Monitor  : ${chalk.cyan(`http://localhost:${DASHBOARD_PORT}`)}`);
   console.log('');
   console.log(chalk.dim('  Press Ctrl+C to stop.\n'));
 }

@@ -15,26 +15,33 @@
     "dist/proxy/",
     "dist/pacing/",
     "dist/db/",
+    "dist/dashboard/",
+    "dist/installer/",
     "dist/scripts/",
     "README.md"
   ],
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc && mkdir -p dist/adapters/pricing && cp src/adapters/pricing/*.json dist/adapters/pricing/",
+    "build": "tsc && mkdir -p dist/adapters/pricing && cp src/adapters/pricing/*.json dist/adapters/pricing/ && rm -rf dist/dashboard/public && cp -r src/dashboard/public dist/dashboard/public && node -e \"const fs=require('fs'); const c=fs.readFileSync('dist/cli.js','utf8'); fs.writeFileSync('dist/cli.js','#!/usr/bin/env node\\n'+c); fs.chmodSync('dist/cli.js',0o755)\"",
     "start": "node dist/index.js",
+    "setup": "tsx src/installer/index.ts",
     "sync-pricing": "tsx src/scripts/sync-pricing.ts",
     "test": "node -r tsx/cjs --test src/__tests__/*.test.ts"
   },
   "dependencies": {
+    "@clack/prompts": "^0.9.1",
     "@fastify/cors": "^10.0.1",
+    "@fastify/static": "^8.0.3",
     "better-sqlite3": "^11.0.0",
     "chalk": "^5.4.1",
     "fastify": "^5.2.1",
-    "nanoid": "^5.0.9"
+    "nanoid": "^5.0.9",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }

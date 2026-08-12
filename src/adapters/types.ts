@@ -29,7 +29,13 @@ export interface ParsedStreamChunk {
 export interface ProviderAdapter {
   id: string;                                  // adapter id, e.g. 'deepseek', 'openai', 'groq'
   wireFormat: 'openai' | 'anthropic' | 'google';
-  endpoint: { host: string; path: string };     // upstream host + path Cappy forwards requests to
+  endpoint: {
+    host: string;
+    // Most providers use one fixed path. Google's native Gemini REST API embeds
+    // the model *and* generateContent vs streamGenerateContent in the URL itself
+    // rather than the JSON body, so the path needs to be resolved per-request.
+    path: string | ((ctx: { model: string; streaming: boolean }) => string);
+  };
   models: string[];                             // known model ids for this provider
   defaultModel: string;
 

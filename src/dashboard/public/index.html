@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f1117">
+  <title>Cappy</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --text:     #e8eaf0;
+      --muted:    #6b7280;
+      --green:    #22c55e;
+      --yellow:   #f59e0b;
+      --red:      #ef4444;
+      --blue:     #3b82f6;
+      --radius:   14px;
+      --gap:      16px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      min-height: 100dvh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px var(--gap) 12px;
+    }
+    header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+    header .header-right { display: flex; align-items: center; gap: 8px; }
+    header .provider-tag {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    header .dot.warn  { background: var(--yellow); }
+    header .dot.error { background: var(--red); }
+
+    .page { padding: 0 var(--gap) 100px; display: flex; flex-direction: column; gap: var(--gap); }
+
+    .banner {
+      display: none;
+      background: #451a03; border: 1px solid #7c3d0c; color: #fbbf24;
+      border-radius: 10px; padding: 10px 14px; font-size: 12px;
+    }
+    .banner.show { display: block; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Window card ─────────────────────────────── */
+    .window-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .window-tag {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: monospace;
+    }
+    .status-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .status-badge.healthy   { background: #14532d; color: var(--green); }
+    .status-badge.low       { background: #451a03; color: var(--yellow); }
+    .status-badge.exhausted { background: #450a0a; color: var(--red); }
+
+    .pct-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .pct-number {
+      font-size: 52px;
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1;
+    }
+    .pct-number.warn  { color: var(--yellow); }
+    .pct-number.error { color: var(--red); }
+    .pct-label {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .progress-track {
+      height: 18px;
+      background: var(--border);
+      border-radius: 9px;
+      overflow: hidden;
+      margin: 14px 0 16px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 9px;
+      transition: width 0.5s ease;
+    }
+    .progress-fill.warn  { background: var(--yellow); }
+    .progress-fill.error { background: var(--red); }
+
+    .refill-row {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .refill-row strong { color: var(--text); }
+
+    .refill-box {
+      display: none;
+      margin-top: 14px;
+      padding: 14px 16px;
+      background: #2d0d0d;
+      border: 1px solid #5a1a1a;
+      border-radius: 10px;
+    }
+    .refill-box.show { display: block; }
+    .refill-box-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 4px;
+    }
+    .refill-box-time {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fca5a5;
+      letter-spacing: -0.5px;
+    }
+
+    /* ── Balance card ────────────────────────────── */
+    .balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .balance-amount {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .balance-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Providers breakdown ─────────────────────── */
+    .provider-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; font-size: 13px; border-bottom: 1px solid var(--border);
+    }
+    .provider-row:last-child { border-bottom: none; }
+    .provider-name { font-weight: 500; text-transform: capitalize; }
+    .provider-count { color: var(--muted); font-size: 11px; margin-left: 6px; }
+    .provider-spent { font-weight: 600; color: var(--blue); }
+
+    /* ── Activity ────────────────────────────────── */
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .req-list { display: flex; flex-direction: column; gap: 8px; }
+    .req-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--bg);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .req-item-left { display: flex; flex-direction: column; gap: 2px; }
+    .req-item-model { font-weight: 500; }
+    .req-item-provider {
+      font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 4px;
+      background: #1a1a2e; color: #818cf8; text-transform: uppercase;
+    }
+    .req-item-tokens { color: var(--muted); font-size: 11px; }
+    .req-item-cost { font-weight: 600; color: var(--blue); font-size: 13px; }
+    .req-item-cap { color: var(--red); font-size: 10px; margin-top: 2px; }
+    .empty-state { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+
+    /* ── Connect ─────────────────────────────────── */
+    .btn {
+      display: block; width: 100%; padding: 14px;
+      border: none; border-radius: var(--radius);
+      font-size: 15px; font-weight: 600; cursor: pointer; text-align: center;
+    }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .connect-block {
+      background: var(--bg); border-radius: 8px;
+      padding: 12px 14px; margin-top: 12px; font-size: 12px;
+    }
+    .connect-block .label { color: var(--muted); margin-bottom: 2px; }
+    .connect-block .value { font-family: monospace; font-size: 13px; word-break: break-all; }
+    .connect-block + .connect-block { margin-top: 8px; }
+    .qr-wrap { text-align: center; padding: 16px 0 8px; }
+    .qr-wrap img { border-radius: 8px; }
+
+    /* ── Toast ───────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      font-size: 13px; padding: 10px 20px; border-radius: 20px;
+      opacity: 0; transition: opacity 0.2s; pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Tab bar ─────────────────────────────────── */
+    .tab-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: flex; background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .tab {
+      flex: 1; padding: 10px 0 8px; text-align: center;
+      font-size: 10px; color: var(--muted); cursor: pointer;
+      border: none; background: none;
+    }
+    .tab.active { color: var(--blue); }
+    .tab-icon { font-size: 20px; display: block; margin-bottom: 2px; }
+
+    .view { display: none; }
+    .view.active { display: block; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cappy</h1>
+    <div class="header-right">
+      <span class="provider-tag" id="providerTag"></span>
+      <div id="statusDot" class="dot"></div>
+    </div>
+  </header>
+
+  <div class="page">
+
+    <div class="banner" id="staleBanner">
+      Pricing data may be stale — run <code>cappy sync-pricing</code> to refresh.
+    </div>
+
+    <!-- ── Overview ──────────────────────────────────────────────────── -->
+    <div id="viewOverview" class="view active">
+
+      <!-- Window card: most important, shown first -->
+      <div class="card">
+        <div class="card-label">Current Window</div>
+        <div class="window-header">
+          <span class="window-tag" id="windowTag">Window #—</span>
+          <span id="windowBadge" class="status-badge healthy">Safe</span>
+        </div>
+
+        <div class="pct-row">
+          <div class="pct-number" id="windowPctNumber">—</div>
+          <div class="pct-label">% remaining</div>
+        </div>
+
+        <div class="progress-track">
+          <div class="progress-fill" id="windowProgress" style="width:0%"></div>
+        </div>
+
+        <div class="refill-row" id="refillRow">Refills at <strong id="refillTime">—</strong></div>
+
+        <!-- Shown only when exhausted -->
+        <div class="refill-box" id="refillBox">
+          <div class="refill-box-label">Window exhausted — next refill</div>
+          <div class="refill-box-time" id="refillBoxTime">—</div>
+        </div>
+      </div>
+
+      <!-- Weekly budget card -->
+      <div class="card">
+        <div class="card-label">This Week</div>
+        <div class="window-header">
+          <span class="window-tag" id="weekTag">Week #—</span>
+          <span id="weekBadge" class="status-badge healthy">Healthy</span>
+        </div>
+        <div class="pct-row">
+          <div class="pct-number" id="weekPctNumber">—</div>
+          <div class="pct-label">% remaining</div>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="weekProgress" style="width:0%"></div>
+        </div>
+        <div class="refill-row" id="weekRefillRow">Resets <strong id="weekResetTime">—</strong></div>
+        <div class="refill-box" id="weekRefillBox">
+          <div class="refill-box-label">Weekly budget exhausted — resets</div>
+          <div class="refill-box-time" id="weekRefillBoxTime">—</div>
+        </div>
+      </div>
+
+      <!-- Balance card: secondary -->
+      <div class="card">
+        <div class="card-label">Provider Balance</div>
+        <div class="balance-row">
+          <div class="balance-amount" id="balanceAmount">—</div>
+          <div style="font-size:12px;color:var(--muted)" id="balanceSessions">— sessions left</div>
+        </div>
+        <div class="balance-sub" id="balanceSub">Loading…</div>
+      </div>
+
+      <!-- Provider breakdown: relevant once multiple providers share a ledger -->
+      <div class="card" id="providersCard" style="display:none">
+        <div class="card-label">By Provider</div>
+        <div id="providersList"></div>
+      </div>
+
+    </div>
+
+    <!-- ── Activity ───────────────────────────────────────────────────── -->
+    <div id="viewActivity" class="view">
+      <div class="section-title">Recent requests</div>
+      <div class="req-list" id="reqList">
+        <div class="empty-state">No requests yet</div>
+      </div>
+    </div>
+
+    <!-- ── Connect ────────────────────────────────────────────────────── -->
+    <div id="viewConnect" class="view">
+      <div class="card">
+        <div class="card-label">opencode / Cline / Aider / Cursor</div>
+        <div class="connect-block">
+          <div class="label">Base URL</div>
+          <div class="value" id="connectProxy">http://localhost:4000/v1</div>
+        </div>
+        <div class="connect-block">
+          <div class="label">Model</div>
+          <div class="value" id="connectModel">—</div>
+        </div>
+        <div class="connect-block">
+          <div class="label">API Key</div>
+          <div class="value" id="connectApiKey">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Phone Access</div>
+        <div class="connect-block">
+          <div class="label">Same WiFi</div>
+          <div class="value" id="connectWifi">—</div>
+        </div>
+        <button class="btn btn-primary" id="pairBtn" style="margin-top:16px">
+          Pair Phone (QR)
+        </button>
+        <div id="qrSection" style="display:none">
+          <div class="qr-wrap"><img id="qrImg" src="" alt="QR code" width="200" height="200"></div>
+          <div style="font-size:12px;color:var(--muted);text-align:center">Scan with your phone's camera</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <nav class="tab-bar">
+    <button class="tab active" onclick="switchTab('Overview')">
+      <span class="tab-icon">◉</span>Overview
+    </button>
+    <button class="tab" onclick="switchTab('Activity')">
+      <span class="tab-icon">⟳</span>Activity
+    </button>
+    <button class="tab" onclick="switchTab('Connect')">
+      <span class="tab-icon">⌁</span>Connect
+    </button>
+  </nav>
+
+  <div id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -8,20 +8,26 @@ import { compress } from './compression';
 import { CHARS_PER_TOKEN } from '../pacing/pricing';
 import { passthroughRouter } from './router';
 import { getAdapter, isPricingStale } from '../adapters/registry';
-import type { ProviderAdapter } from '../adapters/types';
+import type { ProviderAdapter, CanonicalUsage } from '../adapters/types';
 import type { ChatCompletionRequest } from '../types';
 
 export const PROXY_PORT = 4000;
 
 // ── Provider HTTP helper ─────────────────────────────────────────────────────
 
-function providerPost(adapter: ProviderAdapter, body: object, apiKey: string): Promise<IncomingMessage> {
+function resolvePath(adapter: ProviderAdapter, model: string, streaming: boolean): string {
+  return typeof adapter.endpoint.path === 'function'
+    ? adapter.endpoint.path({ model, streaming })
+    : adapter.endpoint.path;
+}
+
+function providerPost(adapter: ProviderAdapter, body: object, apiKey: string, model: string, streaming: boolean): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
     const req = https.request(
       {
         hostname: adapter.endpoint.host,
-        path: adapter.endpoint.path,
+        path: resolvePath(adapter, model, streaming),
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +156,7 @@ export async function startProxyServer(): Promise<void> {
 
     // ── Non-streaming ──────────────────────────────────────────────────────
     if (!requestedStream) {
-      const upstream = await providerPost(adapter, upstreamBody, config.api_key);
+      const upstream = await providerPost(adapter, upstreamBody, config.api_key, model, false);
       const chunks: Buffer[] = [];
       for await (const chunk of upstream) chunks.push(chunk as Buffer);
       const data = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
@@ -185,11 +191,11 @@ export async function startProxyServer(): Promise<void> {
 
     let outputChars = 0;
     let capTriggered = false;
-    let finalUsage: ReturnType<ProviderAdapter['parseUsage']> | null = null;
+    let finalUsage: CanonicalUsage | null = null;
     let buffer = '';
 
     try {
-      const upstream = await providerPost(adapter, upstreamBody, config.api_key);
+      const upstream = await providerPost(adapter, upstreamBody, config.api_key, model, true);
 
       for await (const raw of upstream) {
         buffer += (raw as Buffer).toString();
@@ -197,6 +203,14 @@ export async function startProxyServer(): Promise<void> {
         buffer = lines.pop() ?? '';
 
         for (const line of lines) {
+          // Anthropic frames SSE as paired "event: <type>\ndata: {...}\n\n" lines;
+          // OpenAI-wire providers only ever send "data: {...}\n\n". Relay any
+          // event: line through untouched so Anthropic-aware clients still see
+          // the frame type — this is a no-op for adapters that never emit one.
+          if (line.startsWith('event: ')) {
+            res.write(line + '\n');
+            continue;
+          }
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
 
@@ -210,7 +224,20 @@ export async function startProxyServer(): Promise<void> {
           catch { continue; }
 
           const parsed = adapter.parseStreamChunk(chunk);
-          if (parsed?.usage) finalUsage = parsed.usage;
+          if (parsed?.usage) {
+            // Merge rather than overwrite: some adapters (Anthropic) split usage
+            // across multiple stream events — message_start carries input/cache
+            // tokens, message_delta carries the final output tokens — so a later
+            // event must not blank out fields an earlier one already reported.
+            const prev: CanonicalUsage = finalUsage ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+            const next = parsed.usage;
+            finalUsage = {
+              inputTokens: next.inputTokens || prev.inputTokens,
+              outputTokens: next.outputTokens || prev.outputTokens,
+              cacheReadTokens: next.cacheReadTokens || prev.cacheReadTokens,
+              cacheWriteTokens: next.cacheWriteTokens || prev.cacheWriteTokens,
+            };
+          }
           if (parsed?.content) outputChars += parsed.content.length;
 
           // Per-chunk catastrophic cap check
@@ -220,7 +247,10 @@ export async function startProxyServer(): Promise<void> {
           );
           if (!capTriggered && runningCost > cap) {
             capTriggered = true;
-            res.write('data: [DONE]\n\n');
+            // [DONE] is an OpenAI-wire sentinel; other formats end a stream by
+            // closing the connection (res.end() below), so sending it there
+            // would just be a stray, meaningless frame.
+            if (adapter.wireFormat === 'openai') res.write('data: [DONE]\n\n');
             break;
           }
 

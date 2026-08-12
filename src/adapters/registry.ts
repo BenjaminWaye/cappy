@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import type { ProviderAdapter, PricingRow } from './types';
 import { openaiCompatibleAdapter } from './openai-compatible';
+import { anthropicAdapter } from './anthropic';
+import { googleAdapter } from './google';
 
 interface SyncedPricingFile {
   syncedAt: string;
@@ -25,21 +27,27 @@ function readJson<T>(file: string, fallback: T): T {
   }
 }
 
-// Hosts for OpenAI-wire-format providers, used when models.dev doesn't publish a
-// direct REST `api` URL for a provider (it's often aimed at SDK-level integration).
+// Hosts for providers, used when models.dev doesn't publish a direct REST `api`
+// URL for a provider (it's often aimed at SDK-level integration instead).
 const KNOWN_HOSTS: Record<string, string> = {
   deepseek: 'api.deepseek.com',
   openai: 'api.openai.com',
   groq: 'api.groq.com',
   xai: 'api.x.ai',
   mistral: 'api.mistral.ai',
+  anthropic: 'api.anthropic.com',
+  google: 'generativelanguage.googleapis.com',
 };
 
-// Providers Cappy currently wires up — all speak the OpenAI chat-completions wire
-// format. Anthropic/Google use different wire formats and need bespoke adapters
-// (see plan milestones M6/M7) — not implemented yet, so deliberately excluded here
-// even though their pricing is already synced into synced.json for future use.
+// Providers using the generic OpenAI chat-completions wire format — the shared
+// factory covers all of them via config (host + pricing) alone.
 const OPENAI_COMPATIBLE_PROVIDERS = new Set(['deepseek', 'openai', 'groq', 'xai', 'mistral']);
+
+// Providers with genuinely different wire formats get their own adapter factory.
+const BESPOKE_ADAPTERS: Record<string, (cfg: { host: string; pricing: Record<string, PricingRow>; defaultModel: string }) => ProviderAdapter> = {
+  anthropic: anthropicAdapter,
+  google: googleAdapter,
+};
 
 export function loadSyncedPricing(): SyncedPricingFile {
   return readJson<SyncedPricingFile>('synced.json', { syncedAt: '', source: 'models.dev', providers: {} });
@@ -59,9 +67,11 @@ function mergedPricing(providerId: string): { host: string | null; pricing: Reco
 }
 
 export function getAdapter(providerId: string, preferredDefaultModel?: string): ProviderAdapter {
-  if (!OPENAI_COMPATIBLE_PROVIDERS.has(providerId)) {
+  const isOpenAiCompatible = OPENAI_COMPATIBLE_PROVIDERS.has(providerId);
+  const bespokeFactory = BESPOKE_ADAPTERS[providerId];
+  if (!isOpenAiCompatible && !bespokeFactory) {
     throw new Error(
-      `Unknown or unsupported provider "${providerId}". Supported: ${[...OPENAI_COMPATIBLE_PROVIDERS].join(', ')}`,
+      `Unknown or unsupported provider "${providerId}". Supported: ${listProviders().join(', ')}`,
     );
   }
   const { host, pricing } = mergedPricing(providerId);
@@ -73,11 +83,13 @@ export function getAdapter(providerId: string, preferredDefaultModel?: string): 
     throw new Error(`No pricing data for provider "${providerId}" — run "cappy sync-pricing" first`);
   }
   const defaultModel = preferredDefaultModel && pricing[preferredDefaultModel] ? preferredDefaultModel : modelIds[0]!;
-  return openaiCompatibleAdapter({ id: providerId, host, pricing, defaultModel });
+  return bespokeFactory
+    ? bespokeFactory({ host, pricing, defaultModel })
+    : openaiCompatibleAdapter({ id: providerId, host, pricing, defaultModel });
 }
 
 export function listProviders(): string[] {
-  return [...OPENAI_COMPATIBLE_PROVIDERS];
+  return [...OPENAI_COMPATIBLE_PROVIDERS, ...Object.keys(BESPOKE_ADAPTERS)];
 }
 
 // ── Pricing freshness ────────────────────────────────────────────────────────
