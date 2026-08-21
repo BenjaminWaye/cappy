@@ -1,6 +1,7 @@
 import Fastify, { type FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import https from 'https';
+import crypto from 'crypto';
 import type { IncomingMessage } from 'http';
 import { getConfig, saveRequest } from '../db/ledger';
 import { getCurrentWindow, getCurrentWeek, deductUsage, catastrophicCap, formatDuration } from '../pacing/windows';
@@ -12,6 +13,11 @@ import type { ProviderAdapter, CanonicalUsage } from '../adapters/types';
 import type { ChatCompletionRequest } from '../types';
 
 export const PROXY_PORT = 4000;
+
+// A hung upstream (network black hole, provider outage) would otherwise tie up
+// the request indefinitely — bounded generously since long completions/streams
+// are normal, but not unbounded.
+const UPSTREAM_TIMEOUT_MS = 120_000;
 
 // ── Provider HTTP helper ─────────────────────────────────────────────────────
 
@@ -29,6 +35,7 @@ function providerPost(adapter: ProviderAdapter, body: object, apiKey: string, mo
         hostname: adapter.endpoint.host,
         path: resolvePath(adapter, model, streaming),
         method: 'POST',
+        timeout: UPSTREAM_TIMEOUT_MS,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
@@ -38,6 +45,7 @@ function providerPost(adapter: ProviderAdapter, body: object, apiKey: string, mo
       resolve,
     );
     req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error(`Upstream request to ${adapter.endpoint.host} timed out`)));
     req.write(payload);
     req.end();
   });
@@ -48,6 +56,18 @@ function providerPost(adapter: ProviderAdapter, body: object, apiKey: string, mo
 function extractBearer(authorization: string | undefined): string {
   if (!authorization?.startsWith('Bearer ')) return '';
   return authorization.slice(7).trim();
+}
+
+// Constant-time comparison so a valid key can't be brute-forced by timing how
+// long a rejection takes to come back, character by character.
+export function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    crypto.timingSafeEqual(bufA, bufA); // still do constant-time work either way
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 // ── Main server ──────────────────────────────────────────────────────────────
@@ -64,7 +84,7 @@ export async function startProxyServer(): Promise<void> {
       return void reply.code(503).send({ error: { message: 'Cappy not configured. Run setup first.', type: 'server_error' } });
     }
     const token = extractBearer(req.headers.authorization as string | undefined);
-    if (token !== config.local_api_key) {
+    if (!safeEqual(token, config.local_api_key)) {
       return void reply.code(401).send({ error: { message: 'Unauthorized', type: 'invalid_request_error', code: 'invalid_api_key' } });
     }
   });
@@ -156,10 +176,22 @@ export async function startProxyServer(): Promise<void> {
 
     // ── Non-streaming ──────────────────────────────────────────────────────
     if (!requestedStream) {
-      const upstream = await providerPost(adapter, upstreamBody, config.api_key, model, false);
-      const chunks: Buffer[] = [];
-      for await (const chunk of upstream) chunks.push(chunk as Buffer);
-      const data = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
+      let data: Record<string, unknown>;
+      let upstreamStatus = 200;
+      try {
+        const upstream = await providerPost(adapter, upstreamBody, config.api_key, model, false);
+        upstreamStatus = upstream.statusCode ?? 200;
+        const chunks: Buffer[] = [];
+        for await (const chunk of upstream) chunks.push(chunk as Buffer);
+        data = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
+      } catch (err) {
+        // Upstream unreachable, timed out, or returned a non-JSON error body
+        // (e.g. a gateway's HTML error page) — no charge is recorded since we
+        // never got a usable response to meter.
+        return reply.code(502).send({
+          error: { message: `Upstream request to ${adapter.id} failed: ${err instanceof Error ? err.message : String(err)}`, type: 'server_error' },
+        });
+      }
       const rewritten = adapter.rewriteModel(data, model);
 
       const usage = adapter.parseUsage(rewritten);
@@ -176,7 +208,7 @@ export async function startProxyServer(): Promise<void> {
         window_id: win.id, balance_before: balanceBefore, balance_after: balanceBefore - actual,
         catastrophic_cap_triggered: 0,
       });
-      return reply.send(rewritten);
+      return reply.code(upstreamStatus).send(rewritten);
     }
 
     // ── Streaming ──────────────────────────────────────────────────────────

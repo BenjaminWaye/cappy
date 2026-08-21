@@ -2,6 +2,11 @@
   "name": "cappy",
   "version": "0.1.0",
   "description": "Local budget-paced LLM proxy for any provider — spread a prepaid API budget across the month, for OpenAI-compatible providers today (DeepSeek, OpenAI, Groq, and more), with pricing kept fresh via models.dev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BenjaminWaye/cappy.git"
+  },
   "engines": { "node": ">=18" },
   "preferGlobal": true,
   "main": "dist/lib.js",
@@ -37,7 +42,7 @@
   "dependencies": {
     "@clack/prompts": "^0.9.1",
     "@fastify/cors": "^10.0.1",
-    "@fastify/static": "^8.0.3",
+    "@fastify/static": "^10.1.3",
     "better-sqlite3": "^11.0.0",
     "chalk": "^5.4.1",
     "fastify": "^5.2.1",

@@ -19,18 +19,16 @@ jobs:
           node-version: 20
 
       - run: npm ci
-        working-directory: cappy
 
       - run: npm run sync-pricing
-        working-directory: cappy
 
       - name: Commit pricing update if changed
         run: |
-          if ! git diff --quiet -- cappy/src/adapters/pricing/synced.json; then
+          if ! git diff --quiet -- src/adapters/pricing/synced.json; then
             git config user.name "cappy-bot"
             git config user.email "cappy-bot@users.noreply.github.com"
-            git add cappy/src/adapters/pricing/synced.json
-            git commit -m "chore(cappy): sync pricing from models.dev"
+            git add src/adapters/pricing/synced.json
+            git commit -m "chore: sync pricing from models.dev"
             git push
           else
             echo "No pricing changes."

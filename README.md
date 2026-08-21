@@ -65,13 +65,36 @@ setup registers Cappy's proxy + dashboard ports with it automatically so a
 phone can reach them over Tailscale — Cappy has no hard dependency on it
 either way.
 
+## Security notes
+
+Cappy is built for **single-user, local/home-network use** — the threat model
+assumes the proxy and dashboard aren't reachable by anyone you wouldn't hand
+your API key to.
+
+- The proxy (`:4000`) binds to `127.0.0.1` and requires the `local_api_key`
+  bearer token generated at setup.
+- The dashboard (`:3080`) binds to `0.0.0.0` on purpose, so it's reachable
+  from your phone on the same Wi-Fi (and further, via
+  [remote-runner](https://github.com/BenjaminWaye/remote-runner)) — but it
+  has **no authentication on any endpoint**. Anyone who can reach the port
+  can read spend history and provider info, and mint a device-pairing token.
+  Don't expose `:3080` beyond a trusted home network or Tailscale.
+- Provider API keys are stored in plaintext in `~/.cappy/ledger.db`, same as
+  most local dev tools that hold credentials (e.g. CLI config files) — this
+  isn't an oversight, but don't run Cappy on a shared/multi-user machine.
+
 ## Status
 
 Implemented: config/ledger/pacing core, OpenAI-compatible + Anthropic +
-Google adapters, the metering proxy, the pricing sync pipeline, the setup
-wizard, and the spend dashboard. Not yet implemented: multi-profile support
-(pacing more than one provider/budget at once). See the project plan for
-milestones.
+Google adapters, the metering proxy (with upstream timeouts, status-code
+passthrough, and constant-time auth comparison), the pricing sync pipeline,
+the setup wizard, and the spend dashboard. CI runs build+typecheck+tests on
+every push.
+
+Not yet implemented: multi-profile support (pacing more than one
+provider/budget at once), dashboard authentication (see above), and an npm
+registry publish (install today via `github:BenjaminWaye/cappy` or by
+cloning). See the project plan for milestones.
 
 ## Development
 
