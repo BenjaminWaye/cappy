@@ -4,13 +4,18 @@
   "description": "Local budget-paced LLM proxy for any provider — spread a prepaid API budget across the month, for OpenAI-compatible providers today (DeepSeek, OpenAI, Groq, and more), with pricing kept fresh via models.dev",
   "engines": { "node": ">=18" },
   "preferGlobal": true,
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
   "bin": {
     "cappy": "dist/cli.js"
   },
   "files": [
     "dist/cli.js",
     "dist/index.js",
+    "dist/lib.js",
+    "dist/lib.d.ts",
     "dist/types.js",
+    "dist/types.d.ts",
     "dist/adapters/",
     "dist/proxy/",
     "dist/pacing/",
@@ -23,6 +28,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc && mkdir -p dist/adapters/pricing && cp src/adapters/pricing/*.json dist/adapters/pricing/ && rm -rf dist/dashboard/public && cp -r src/dashboard/public dist/dashboard/public && node -e \"const fs=require('fs'); const c=fs.readFileSync('dist/cli.js','utf8'); fs.writeFileSync('dist/cli.js','#!/usr/bin/env node\\n'+c); fs.chmodSync('dist/cli.js',0o755)\"",
+    "prepare": "npm run build",
     "start": "node dist/index.js",
     "setup": "tsx src/installer/index.ts",
     "sync-pricing": "tsx src/scripts/sync-pricing.ts",
